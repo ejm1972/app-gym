@@ -34,19 +34,19 @@ else
   echo "✓ Volumen '$VOLUME_NAME' creado"
 fi
 
-# 3. Verificar archivo de configuración
+# 3. Verificar .env
 echo ""
-echo "▶ Verificando config/database.php..."
-if [ ! -f "config/database.php" ]; then
-  if [ -f "config/database.example.php" ]; then
-    cp config/database.example.php config/database.php
-    echo "✓ config/database.php creado desde el ejemplo"
+echo "▶ Verificando .env..."
+if [ ! -f ".env" ]; then
+  if [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "✓ .env creado desde .env.example"
   else
-    echo "✗ No se encontró config/database.example.php"
+    echo "✗ No se encontró .env.example"
     exit 1
   fi
 else
-  echo "✓ config/database.php ya existe"
+  echo "✓ .env ya existe"
 fi
 
 # 4. Build y levantar contenedores
