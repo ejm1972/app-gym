@@ -8,7 +8,7 @@
 set -e
 
 COMPOSE_FILE="docker/docker-compose.yml"
-VOLUME_NAME="gymapp_db_data"
+VOLUME_NAME="app-gym-db-data"
 
 echo ""
 echo "╔══════════════════════════════════════╗"

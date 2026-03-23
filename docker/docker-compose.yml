@@ -1,5 +1,4 @@
 services:
-
   app:
     build:
       context: ..
@@ -43,6 +42,8 @@ services:
 
 volumes:
   db_data:
+      external: true
+      name: app-gym-db-data
 
 networks:
   app-gym-net:
