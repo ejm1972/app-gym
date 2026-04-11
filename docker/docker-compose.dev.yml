@@ -1,0 +1,75 @@
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: app-gym-nginx
+    ports:
+      - "8282:80"
+    volumes:
+      - ..:/var/www/html
+      - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf
+    environment:
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      VIRTUAL_PORT: ${VIRTUAL_PORT}
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    depends_on:
+      - php
+    restart: unless-stopped
+    networks:
+      - app-gym-net
+      - proxy_net
+
+  php:
+    build:
+      context: ..
+      dockerfile: docker/dev.dockerfile
+    container_name: app-gym-php
+    environment:
+      MYSQLHOST: ${DB_HOST}
+      MYSQLDATABASE: ${DB_NAME}
+      MYSQLUSER: ${DB_USER}
+      MYSQLPASSWORD: ${DB_PASS}
+      MYSQLPORT: ${DB_PORT}
+      MYSQLCHARSET: ${DB_CHARSET}
+     expose:
+      - 9000
+    volumes:
+      - ..:/var/www/html
+      - ./php-config.dev.ini:/usr/local/etc/php/conf.d/custom.ini
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-gym-net
+
+  db:
+    image: mysql:5.7
+    container_name: app-gym-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    ports:
+      - "${DB_PORT}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app-gym-net
+
+volumes:
+  db_data:
+
+networks:
+  app-gym-net:
+    driver: bridge
+  proxy_net:
+    external: true
+    name: nginx-proxy_net
