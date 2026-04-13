@@ -1,6 +1,7 @@
+name: app-gym
 services:
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:stable
     container_name: app-gym-nginx
     ports:
       - "8282:80"
@@ -25,13 +26,13 @@ services:
       dockerfile: docker/dev.dockerfile
     container_name: app-gym-php
     environment:
-      MYSQLHOST: ${DB_HOST}
-      MYSQLDATABASE: ${DB_NAME}
-      MYSQLUSER: ${DB_USER}
-      MYSQLPASSWORD: ${DB_PASS}
-      MYSQLPORT: ${DB_PORT}
-      MYSQLCHARSET: ${DB_CHARSET}
-     expose:
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_PORT: ${DB_PORT}
+      DB_CHARSET: ${DB_CHARSET}
+    expose:
       - 9000
     volumes:
       - ..:/var/www/html
@@ -56,7 +57,7 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "healthcheck", "-phealthcheckpass"]
       interval: 10s
       timeout: 5s
       retries: 5
