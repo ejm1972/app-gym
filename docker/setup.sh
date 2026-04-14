@@ -1,83 +1,149 @@
 #!/bin/bash
-# =============================================================
-# setup.sh — ConInf AppGym
-# Crea el volumen de la BD e inicializa el ambiente Docker
-# Ejecutar desde la raíz del proyecto: bash docker/setup.sh
-# =============================================================
+# =============================================================================
+# setup.sh — Setup inicial de app-gym en el VPS
+# Repo: app-gym-docker
+# Requiere haber corrido setup.sh del repo nginx-proxy primero
+# Correr como root: bash setup.sh
+# =============================================================================
 
 set -e
 
-COMPOSE_FILE="docker/docker-compose.yml"
-VOLUME_NAME="app-gym-db-data"
+APP_USER="deploy"
+APP_GYM_DIR="/srv/app-gym"
+BACKUP_DIR="/srv/backups/app-gym"
 
-echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║   ConInf AppGym — Setup Docker       ║"
-echo "╚══════════════════════════════════════╝"
-echo ""
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+ok()   { echo -e "${GREEN}✅ $1${NC}"; }
+warn() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+err()  { echo -e "${RED}❌ $1${NC}"; exit 1; }
 
-# 1. Verificar que Docker esté corriendo
-echo "▶ Verificando Docker..."
-if ! docker info > /dev/null 2>&1; then
-  echo "✗ Docker no está corriendo. Inicialo e intentá de nuevo."
-  exit 1
+[ "$EUID" -ne 0 ] && err "Este script debe correrse como root"
+
+# Verificar que el setup del proxy ya se corrió
+if ! docker network inspect nginx-proxy_net &>/dev/null; then
+  err "La red 'nginx-proxy_net' no existe. Corré primero el deploy.sh del repo nginx-proxy."
 fi
-echo "✓ Docker OK"
 
-# 2. Crear volumen si no existe
 echo ""
-echo "▶ Verificando volumen de base de datos..."
-if docker volume inspect "$VOLUME_NAME" > /dev/null 2>&1; then
-  echo "✓ Volumen '$VOLUME_NAME' ya existe"
+echo "============================================="
+echo "  Setup — app-gym"
+echo "============================================="
+echo ""
+
+# ── 1. Directorios ────────────────────────────────────────────────────────────
+echo "📁 Creando directorios..."
+mkdir -p $APP_GYM_DIR/app
+mkdir -p $BACKUP_DIR
+chown -R $APP_USER:$APP_USER $APP_GYM_DIR
+chown -R $APP_USER:$APP_USER $BACKUP_DIR
+ok "Directorios creados: $APP_GYM_DIR y $BACKUP_DIR"
+
+# ── 2. Volumen MySQL ──────────────────────────────────────────────────────────
+echo ""
+echo "💾 Creando volumen Docker para MySQL..."
+if docker volume inspect app-gym_mysql_data &>/dev/null; then
+  warn "El volumen ya existe, saltando..."
 else
-  docker volume create "$VOLUME_NAME"
-  echo "✓ Volumen '$VOLUME_NAME' creado"
+  docker volume create app-gym_mysql_data
+  ok "Volumen 'app-gym_mysql_data' creado"
 fi
 
-# 3. Verificar .env
+# ── 3. Crear .env interactivo ─────────────────────────────────────────────────
 echo ""
-echo "▶ Verificando .env..."
-if [ ! -f ".env" ]; then
-  if [ -f ".env.example" ]; then
-    cp .env.example .env
-    echo "✓ .env creado desde .env.example"
-  else
-    echo "✗ No se encontró .env.example"
-    exit 1
-  fi
+echo "⚙️  Configuración del archivo .env"
+echo "─────────────────────────────────────────────"
+
+if [ -f "$APP_GYM_DIR/.env" ]; then
+  warn ".env ya existe en $APP_GYM_DIR/.env — saltando (editalo manualmente si cambió)"
 else
-  echo "✓ .env ya existe"
+  echo "Completá los valores (Enter para usar el default entre corchetes):"
+  echo ""
+
+  read -p "  MySQL root password:       " MYSQL_ROOT_PASSWORD
+  read -p "  MySQL usuario de la app:   [app-gym_user] " MYSQL_USER
+  MYSQL_USER=${MYSQL_USER:-app-gym_user}
+  read -p "  MySQL password de la app:  " MYSQL_PASSWORD
+  read -p "  MySQL nombre de la BD:     [app-gym] " MYSQL_DATABASE
+  MYSQL_DATABASE=${MYSQL_DATABASE:-app-gym}
+
+  echo ""
+  read -p "  SMTP host:                 [smtp.gmail.com] " SMTP_HOST
+  SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+  read -p "  SMTP puerto:               [587] " SMTP_PORT
+  SMTP_PORT=${SMTP_PORT:-587}
+  read -p "  SMTP usuario (email):      " SMTP_USER
+  read -p "  SMTP password (app pass):  " SMTP_PASS
+  read -p "  SMTP from name:            [App-Gym] " SMTP_FROM_NAME
+  SMTP_FROM_NAME=${SMTP_FROM_NAME:-App-Gym}
+
+  cat > $APP_GYM_DIR/.env <<EOF
+# Base de datos — MYSQLHOST debe ser "db" siempre
+MYSQLHOST=db
+MYSQLDATABASE=$MYSQL_DATABASE
+MYSQLUSER=$MYSQL_USER
+MYSQLPASSWORD=$MYSQL_PASSWORD
+MYSQLPORT=3306
+MYSQLCHARSET=utf8mb4
+
+# Variables para docker-compose (creación inicial de la BD)
+MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+MYSQL_DATABASE=$MYSQL_DATABASE
+MYSQL_USER=$MYSQL_USER
+MYSQL_PASSWORD=$MYSQL_PASSWORD
+
+# SMTP
+SMTP_HOST=$SMTP_HOST
+SMTP_PORT=$SMTP_PORT
+SMTP_USER=$SMTP_USER
+SMTP_PASS=$SMTP_PASS
+SMTP_ENCRYPTION=STARTTLS
+SMTP_FROM=$SMTP_USER
+SMTP_FROM_NAME=$SMTP_FROM_NAME
+SMTP_TIMEOUT=30
+SMTP_VERIFY_PEER=true
+SMTP_SENDER=$SMTP_USER
+EOF
+
+  chmod 600 $APP_GYM_DIR/.env
+  chown $APP_USER:$APP_USER $APP_GYM_DIR/.env
+  ok ".env creado en $APP_GYM_DIR/.env"
 fi
 
-# 4. Build y levantar contenedores
+# ── 4. Backup automático ──────────────────────────────────────────────────────
 echo ""
-echo "▶ Construyendo imágenes y levantando contenedores..."
-docker compose -f "$COMPOSE_FILE" up -d --build
+echo "💾 Configurando backup automático de MySQL..."
 
-# 5. Esperar a que MySQL esté listo
-echo ""
-echo "▶ Esperando a que la base de datos esté lista..."
-RETRIES=15
-COUNT=0
-until docker exec app-gym-db mysqladmin ping -h localhost --silent 2>/dev/null; do
-  COUNT=$((COUNT + 1))
-  if [ "$COUNT" -ge "$RETRIES" ]; then
-    echo "✗ La base de datos no respondió a tiempo."
-    exit 1
-  fi
-  echo "  ... esperando ($COUNT/$RETRIES)"
-  sleep 3
-done
-echo "✓ Base de datos lista"
+cat > /usr/local/bin/backup-app-gym.sh <<'BACKUP'
+#!/bin/bash
+BACKUP_DIR="/srv/backups/app-gym"
+FECHA=$(date +%Y-%m-%d_%H-%M)
+ARCHIVO="$BACKUP_DIR/db_$FECHA.sql.gz"
 
-# 6. Resumen final
+source /srv/app-gym/.env
+
+docker exec app-gym-db \
+  mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" \
+  | gzip > "$ARCHIVO"
+
+# Retención 7 días
+find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
+
+echo "[$FECHA] Backup guardado: $ARCHIVO"
+BACKUP
+
+chmod +x /usr/local/bin/backup-app-gym.sh
+
+CRON_JOB="0 3 * * * /usr/local/bin/backup-app-gym.sh >> /var/log/backup-app-gym.log 2>&1"
+( crontab -l 2>/dev/null | grep -v "backup-app-gym"; echo "$CRON_JOB" ) | crontab -
+ok "Backup automático: todos los días a las 3am, retención 7 días"
+
+# ── 5. Resumen ────────────────────────────────────────────────────────────────
+VPS_IP=$(curl -s ifconfig.me 2>/dev/null || echo 'IP_DEL_VPS')
 echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║   ✓ Ambiente listo                   ║"
-echo "╠══════════════════════════════════════╣"
-echo "║   App   →  http://localhost:8080     ║"
-echo "║   MySQL →  localhost:3306            ║"
-echo "║   BD    →  app_gym                   ║"
-echo "║   User  →  appgym / appgym123        ║"
-echo "╚══════════════════════════════════════╝"
+echo "============================================="
+ok "Setup de app-gym completado"
+echo "============================================="
+echo ""
+echo "Próximo paso — desde tu máquina local (repo app-gym-docker):"
+echo "  ./deploy.sh $VPS_IP"
 echo ""
