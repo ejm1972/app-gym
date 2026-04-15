@@ -53,7 +53,7 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
     expose:
-      - "3306"
+      - 3306
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:

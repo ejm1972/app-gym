@@ -54,7 +54,7 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
     expose:
-      - "3306"
+      - 3306
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -65,6 +65,7 @@ services:
     restart: unless-stopped
     networks:
       - app-gym_net
+      - proxy_net
 
 volumes:
   db_data:
