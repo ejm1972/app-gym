@@ -2,9 +2,7 @@ name: app-gym
 services:
   nginx:
     image: nginx:stable
-    container_name: app-gym-nginx
-    ports:
-      - "8282:80"
+    container_name: app-gym_nginx
     volumes:
       - ..:/var/www/html
       - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf
@@ -13,18 +11,20 @@ services:
       VIRTUAL_PORT: ${VIRTUAL_PORT}
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    expose:
+      - 80
     depends_on:
       - php
     restart: unless-stopped
     networks:
-      - app-gym-net
+      - app-gym_net
       - proxy_net
 
   php:
     build:
-      context: ..
-      dockerfile: docker/dev.dockerfile
-    container_name: app-gym-php
+      context: ./
+      dockerfile: ./dev.dockerfile
+    container_name: app-gym_php
     environment:
       DB_HOST: ${DB_HOST}
       DB_NAME: ${DB_NAME}
@@ -42,18 +42,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - app-gym-net
+      - app-gym_net
 
   db:
     image: mysql:5.7
-    container_name: app-gym-db
+    container_name: app-gym_db
     environment:
+      VIRTUAL_HOST: ${VIRTUAL_HOST_DB}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
-    ports:
-      - "${DB_EXTERNAL_PORT}:3306"
+    expose:
+      - "3306"
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -63,15 +64,15 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - app-gym-net
+      - app-gym_net
 
 volumes:
   db_data:
     external: true
-    name: app-gym-db-data
+    name: app-gym_mysql_data
 
 networks:
-  app-gym-net:
+  app-gym_net:
     driver: bridge
   proxy_net:
     external: true
