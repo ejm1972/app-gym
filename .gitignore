@@ -1,6 +1,7 @@
 # Configuración local sensible
 .env
 config/database.php
+/config/database.php
 
 # Sistema
 .DS_Store
