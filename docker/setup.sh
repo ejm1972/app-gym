@@ -66,42 +66,23 @@ else
   read -p "  MySQL nombre de la BD:     [app-gym] " MYSQL_DATABASE
   MYSQL_DATABASE=${MYSQL_DATABASE:-app-gym}
 
-  echo ""
-  read -p "  SMTP host:                 [smtp.gmail.com] " SMTP_HOST
-  SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-  read -p "  SMTP puerto:               [587] " SMTP_PORT
-  SMTP_PORT=${SMTP_PORT:-587}
-  read -p "  SMTP usuario (email):      " SMTP_USER
-  read -p "  SMTP password (app pass):  " SMTP_PASS
-  read -p "  SMTP from name:            [App-Gym] " SMTP_FROM_NAME
-  SMTP_FROM_NAME=${SMTP_FROM_NAME:-App-Gym}
-
   cat > $APP_GYM_DIR/.env <<EOF
 # Base de datos — MYSQLHOST debe ser "db" siempre
-MYSQLHOST=db
-MYSQLDATABASE=$MYSQL_DATABASE
-MYSQLUSER=$MYSQL_USER
-MYSQLPASSWORD=$MYSQL_PASSWORD
-MYSQLPORT=3306
-MYSQLCHARSET=utf8mb4
+DB_HOST=db
+DB_PORT=3306
+DB_EXTERNAL_PORT=3406
+DB_ROOT_PASS=$MYSQL_ROOT_PASSWORD
+DB_NAME=$MYSQL_DATABASE
+DB_USER=$MYSQL_USER
+DB_PASS=$MYSQL_PASSWORD
+DB_CHARSET=utf8mb4
+VIRTUAL_HOST_DB=appgymdb.coninf.com.ar
 
-# Variables para docker-compose (creación inicial de la BD)
-MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
-MYSQL_DATABASE=$MYSQL_DATABASE
-MYSQL_USER=$MYSQL_USER
-MYSQL_PASSWORD=$MYSQL_PASSWORD
-
-# SMTP
-SMTP_HOST=$SMTP_HOST
-SMTP_PORT=$SMTP_PORT
-SMTP_USER=$SMTP_USER
-SMTP_PASS=$SMTP_PASS
-SMTP_ENCRYPTION=STARTTLS
-SMTP_FROM=$SMTP_USER
-SMTP_FROM_NAME=$SMTP_FROM_NAME
-SMTP_TIMEOUT=30
-SMTP_VERIFY_PEER=true
-SMTP_SENDER=$SMTP_USER
+# PROXY
+VIRTUAL_HOST=appgym.coninf.com.ar
+VIRTUAL_PORT=80
+LETSENCRYPT_HOST=appgym.coninf.com.ar
+LETSENCRYPT_EMAIL=admin@appgym.coninf.com.ar
 EOF
 
   chmod 600 $APP_GYM_DIR/.env
@@ -122,7 +103,7 @@ ARCHIVO="$BACKUP_DIR/db_$FECHA.sql.gz"
 source /srv/app-gym/.env
 
 docker exec app-gym-db \
-  mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" \
+  mysqldump -u root -p"$DB_ROOT_PASS" "$DB_NAME" \
   | gzip > "$ARCHIVO"
 
 # Retención 7 días

@@ -12,7 +12,7 @@ DOMINIO="coninf.com.ar"
 VPS_IP="${1}"
 VPS_USER="deploy"
 APP_GYM_DIR="/srv/app-gym"
-APP_DIR="../app-gym"       # ruta local al código PHP (repo separado)
+APP_DIR=".."       # ruta local al código PHP (repo separado)
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✅ $1${NC}"; }
@@ -49,14 +49,14 @@ else
 fi
 
 # ── 3. Sincronizar código PHP ─────────────────────────────────────────────────
-#echo "📤 Sincronizando código PHP..."
+echo "📤 Sincronizando código PHP..."
 #rsync -az --delete \
 #  --exclude='.git' \
 #  --exclude='node_modules' \
 #  --exclude='.env' \
 #  --exclude='storage/logs/*' \
 #  "$APP_DIR/" "$VPS_USER@$VPS_IP:$APP_GYM_DIR/app/"
-#ok "Código sincronizado"
+ok "Código sincronizado"
 
 # ── 4. Levantar contenedores ──────────────────────────────────────────────────
 echo "🐳 Levantando contenedores..."
