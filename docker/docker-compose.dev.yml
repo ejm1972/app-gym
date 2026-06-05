@@ -11,8 +11,10 @@ services:
       VIRTUAL_PORT: ${VIRTUAL_PORT}
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
-    expose:
-      - 80
+#    expose:
+#      - 80
+    ports:
+      - "8282:80"
     depends_on:
       - php
     restart: unless-stopped
@@ -48,13 +50,14 @@ services:
     image: mysql:5.7
     container_name: app-gym_db
     environment:
-      VIRTUAL_HOST: ${VIRTUAL_HOST_DB}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
     expose:
       - 3306
+    ports:
+      - "${DB_EXTERNAL_PORT}:3306"
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -65,7 +68,6 @@ services:
     restart: unless-stopped
     networks:
       - app-gym_net
-      - proxy_net
 
 volumes:
   db_data:

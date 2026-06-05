@@ -14,13 +14,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'start_session') {
         $routineId = (int)$_POST['routine_id'] ?: null;
-        $name = trim($_POST['session_name'] ?? '');
-        if (!$name && !$routineId) $name = 'Sesión libre';
-        if (!$name && $routineId) {
-            $s = $db->prepare("SELECT name FROM routines WHERE id=?"); $s->execute([$routineId]); $name = $s->fetchColumn();
-        }
-        $stmt = $db->prepare("INSERT INTO workout_sessions (user_id, routine_id, name) VALUES (?, ?, ?)");
-        $stmt->execute([$uid, $routineId, $name]);
+        $stmt = $db->prepare("
+          INSERT INTO workout_sessions (user_id, routine_id, started_at)
+          VALUES (?, ?, NOW())
+        ");
+        $stmt->execute([$uid, $routineId]);
         $sid = $db->lastInsertId();
         header("Location: /workout.php?session=$sid");
         exit;
@@ -31,12 +29,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $setNum = (int)$_POST['set_number'];
         $weight = $_POST['weight'] !== '' ? (float)$_POST['weight'] : null;
         $reps = (int)$_POST['reps'];
+
+
+$reid = isset($_POST['routine_exercise_id']) ? (int)$_POST['routine_exercise_id'] : null;
+$rpe = $_POST['rpe'] !== '' ? (float)$_POST['rpe'] : null;
+
+$best = getPreviousBest($db, $uid, $eid);
+
+$isPR = false;
+
+if ($best) {
+    $prevVolume = $best['weight'] * $best['reps'];
+    $currentVolume = $weight * $reps;
+
+    if ($currentVolume > $prevVolume) {
+        $isPR = true;
+    }
+} else {
+    $isPR = true;
+}
+
         // Verify session belongs to user
         $sv = $db->prepare("SELECT id FROM workout_sessions WHERE id=? AND user_id=?");
         $sv->execute([$sid, $uid]);
         if ($sv->fetch()) {
-            $stmt = $db->prepare("INSERT INTO session_sets (session_id, exercise_id, set_number, weight, reps) VALUES (?,?,?,?,?)");
-            $stmt->execute([$sid, $eid, $setNum, $weight, $reps]);
+$stmt = $db->prepare("
+    INSERT INTO session_sets
+    (session_id, exercise_id, routine_exercise_id, set_number, weight, reps, rpe, is_pr)
+    VALUES (?,?,?,?,?,?,?,?)
+");
+$stmt->execute([
+    $sid,
+    $eid,
+    $reid,
+    $setNum,
+    $weight,
+    $reps,
+    $rpe,
+    $isPR ? 1 : 0
+]);
         }
         header("Location: /workout.php?session=$sid&logged=1");
         exit;
@@ -85,8 +116,18 @@ if ($sessionId) {
 
         // Routine exercises if any
         if ($session['routine_id']) {
-            $rex = $db->prepare("SELECT re.*, e.name AS ex_name, e.muscle_group FROM routine_exercises re JOIN exercises e ON e.id=re.exercise_id WHERE re.routine_id=? ORDER BY re.order_index");
-            $rex->execute([$session['routine_id']]);
+$rex = $db->prepare("
+    SELECT
+        re.*,
+        rd.name AS day_name,
+        e.name AS ex_name,
+        e.muscle_group
+    FROM routine_exercises re
+    JOIN routine_days rd ON rd.id = re.routine_day_id
+    JOIN exercises e ON e.id = re.exercise_id
+    WHERE rd.routine_id=?
+    ORDER BY rd.order_index, re.order_index
+");            $rex->execute([$session['routine_id']]);
             $routineExercises = $rex->fetchAll();
         }
     }
@@ -104,7 +145,9 @@ $routinesList = $myRoutines->fetchAll();
 
 // Previous best for an exercise
 function getPreviousBest(PDO $db, int $uid, int $exId): ?array {
-    $stmt = $db->prepare("SELECT ss.weight, ss.reps FROM session_sets ss JOIN workout_sessions ws ON ws.id=ss.session_id WHERE ws.user_id=? AND ss.exercise_id=? AND ss.weight IS NOT NULL ORDER BY ss.weight DESC LIMIT 1");
+    $stmt = $db->prepare("SELECT ss.weight, ss.reps FROM session_sets ss JOIN workout_sessions ws ON ws.id=ss.session_id WHERE ws.user_id=? AND ss.exercise_id=? AND ss.weight IS NOT NULL
+    ORDER BY (ss.weight * ss.reps) DESC
+    LIMIT 1");
     $stmt->execute([$uid, $exId]);
     return $stmt->fetch() ?: null;
 }
@@ -167,6 +210,7 @@ function getPreviousBest(PDO $db, int $uid, int $exId): ?array {
     <input type="hidden" name="csrf" value="<?= csrf() ?>">
     <input type="hidden" name="action" value="finish_session">
     <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+    <input type="hidden" name="routine_exercise_id" id="routine_exercise_id">
     <div class="form-group">
       <label>Notas finales (opcional)</label>
       <textarea name="notes" class="form-control" placeholder="¿Cómo fue el entrenamiento?"></textarea>
@@ -206,7 +250,15 @@ function getPreviousBest(PDO $db, int $uid, int $exId): ?array {
           if (!empty($routineExercises)): ?>
           <optgroup label="— Rutina: <?= htmlspecialchars($session['routine_name'] ?? '') ?> —">
             <?php foreach ($routineExercises as $re): ?>
-            <option value="<?= $re['exercise_id'] ?>" data-sets="<?= $re['sets'] ?>" data-reps="<?= $re['reps'] ?>"><?= htmlspecialchars($re['ex_name']) ?></option>
+            <option
+              value="<?= $re['exercise_id'] ?>"
+              data-reid="<?= $re['id'] ?>"
+              data-sets="<?= $re['sets'] ?>"
+              data-reps-min="<?= $re['target_reps_min'] ?>"
+              data-reps-max="<?= $re['target_reps_max'] ?>"
+            >
+              <?= htmlspecialchars($re['ex_name']) ?>
+            </option>
             <?php endforeach; ?>
           </optgroup>
           <?php endif; ?>
@@ -220,6 +272,11 @@ function getPreviousBest(PDO $db, int $uid, int $exId): ?array {
       <div id="best-display" style="display:none;padding:8px 12px;background:rgba(232,255,60,0.07);border-radius:var(--radius);border:1px solid rgba(232,255,60,0.15);font-size:0.82rem;color:var(--accent);margin-bottom:12px;">
         🏆 Mejor marca: <span id="best-val"></span>
       </div>
+
+<div id="target-display" style="display:none;font-size:0.82rem;color:#aaa;margin-bottom:10px;">
+  🎯 Objetivo: <span id="target-val"></span>
+</div>
+
       <div style="display:flex;gap:10px;">
         <div class="form-group" style="flex:1;">
           <label>Serie #</label>
@@ -254,7 +311,14 @@ function getPreviousBest(PDO $db, int $uid, int $exId): ?array {
           <tr>
             <td style="padding:5px 8px;color:var(--muted);">#<?= $s['set_number'] ?></td>
             <td style="padding:5px 8px;font-weight:600;"><?= $s['weight'] !== null ? $s['weight'].'kg' : '—' ?></td>
-            <td style="padding:5px 8px;"><?= $s['reps'] ?> reps</td>
+            
+            <td style="padding:5px 8px;">
+              <?= $s['reps'] ?> reps
+              <?php if (!empty($s['is_pr'])): ?>
+                🔥
+              <?php endif; ?>
+            </td>
+            
             <td style="padding:5px 8px;">
               <form method="POST" style="display:inline;" onsubmit="return confirm('¿Borrar esta serie?');">
                 <input type="hidden" name="csrf" value="<?= csrf() ?>">
@@ -299,6 +363,53 @@ function updateBest(sel) {
   const setInput = document.querySelector('input[name="set_number"]');
   const logged = document.querySelectorAll('tbody tr').length;
 }
+
+document.getElementById('ex-select').addEventListener('change', function() {
+  const opt = this.options[this.selectedIndex];
+  const reid = opt.dataset.reid || '';
+  document.getElementById('routine_exercise_id').value = reid;
+});
+
+const targetDisplay = document.getElementById('target-display');
+const targetVal = document.getElementById('target-val');
+
+function updateBest(sel) {
+  const id = sel.value;
+  const opt = sel.options[sel.selectedIndex];
+
+  const display = document.getElementById('best-display');
+  const val = document.getElementById('best-val');
+
+  if (bests[id]) {
+    val.textContent = bests[id];
+    display.style.display = 'block';
+  } else {
+    display.style.display = 'none';
+  }
+
+  // 🎯 objetivo
+  if (opt.dataset.repsMin) {
+    targetVal.textContent = opt.dataset.repsMin + ' - ' + opt.dataset.repsMax + ' reps';
+    targetDisplay.style.display = 'block';
+  } else {
+    targetDisplay.style.display = 'none';
+  }
+}
+
+document.getElementById('ex-select').addEventListener('change', function() {
+  const id = this.value;
+
+  if (bests[id]) {
+    const match = bests[id].match(/(\d+(\.\d+)?)kg/);
+    if (match) {
+      document.querySelector('input[name="weight"]').value = match[1];
+    }
+  }
+});
+
+const logged = document.querySelectorAll('tbody tr').length;
+
+document.querySelector('input[name="set_number"]').value = logged + 1;
 </script>
 <?php endif; ?>
 

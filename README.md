@@ -116,6 +116,12 @@ users
         └── routine_exercises   (ejercicios dentro de una rutina)
   └── workout_sessions
         └── session_sets        (series registradas por sesión)
+routines
+  └── routine_days
+        └── routine_exercises
+
+workout_sessions
+  └── session_sets (conectado a routine_exercises)
 ```
 
 ---
