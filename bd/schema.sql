@@ -94,24 +94,3 @@ CREATE TABLE IF NOT EXISTS routine_days (
 CREATE INDEX idx_sessions_user ON workout_sessions(user_id);
 CREATE INDEX idx_sets_session ON session_sets(session_id);
 CREATE INDEX idx_sets_exercise ON session_sets(exercise_id);
-
---Mejoras
---ALTER TABLE routine_exercises
---ADD COLUMN routine_day_id INT NULL,
---ADD COLUMN target_reps_min INT NULL,
---ADD COLUMN target_reps_max INT NULL,
---ADD COLUMN target_rpe DECIMAL(3,1) NULL,
---ADD COLUMN order_index INT DEFAULT 0,
---ADD FOREIGN KEY (routine_day_id) REFERENCES routine_days(id) ON DELETE CASCADE;
-
---Mejoras
---ALTER TABLE session_sets
---ADD COLUMN routine_exercise_id INT NULL,
---ADD COLUMN rpe DECIMAL(3,1) NULL,
---ADD COLUMN is_pr BOOLEAN DEFAULT FALSE,
---ADD FOREIGN KEY (routine_exercise_id) REFERENCES routine_exercises(id) ON DELETE SET NULL;
-
---Mejoras
---ALTER TABLE workout_sessions
---ADD COLUMN routine_id INT NULL,
---ADD FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE SET NULL;
