@@ -11,10 +11,10 @@ services:
       VIRTUAL_PORT: ${VIRTUAL_PORT}
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
-#    expose:
-#      - 80
-    ports:
-      - "8282:80"
+    expose:
+      - 80
+#    ports:
+#      - "9292:80"
     depends_on:
       - php
     restart: unless-stopped
