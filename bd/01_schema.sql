@@ -1,11 +1,21 @@
--- ConInf AppGym Database Schema
--- Run this file once to set up the database
-
 CREATE DATABASE IF NOT EXISTS app_gym CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE app_gym;
 
--- Users
-CREATE TABLE IF NOT EXISTS users (
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS session_sets;
+DROP TABLE IF EXISTS workout_sessions;
+DROP TABLE IF EXISTS routine_exercises;
+DROP TABLE IF EXISTS routine_blocks;
+DROP TABLE IF EXISTS routine_days;
+DROP TABLE IF EXISTS routines;
+DROP TABLE IF EXISTS exercises;
+DROP TABLE IF EXISTS users;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- 1. Users
+CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
@@ -13,8 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Exercise library (per user)
-CREATE TABLE IF NOT EXISTS exercises (
+-- 2. Exercises library
+CREATE TABLE exercises (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -25,8 +35,8 @@ CREATE TABLE IF NOT EXISTS exercises (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Routines
-CREATE TABLE IF NOT EXISTS routines (
+-- 3. Routines
+CREATE TABLE routines (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -36,22 +46,50 @@ CREATE TABLE IF NOT EXISTS routines (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Exercises within a routine
-CREATE TABLE IF NOT EXISTS routine_exercises (
+-- 4. Routine Days
+CREATE TABLE routine_days (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    routine_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    order_index INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE
+);
+
+-- 5. Routine Blocks (Soporta tipo de bloque y tiempos de circuito)
+CREATE TABLE routine_blocks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     routine_day_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    block_type VARCHAR(20) DEFAULT 'TRADITIONAL', -- 'TRADITIONAL', 'CIRCUIT', 'SUPERSET'
+    work_seconds INT NULL,                       -- Ej: 20 seg trabajo
+    rest_between_exercises INT NULL,             -- Ej: 40 seg descanso entre ejercicios
+    order_index INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (routine_day_id) REFERENCES routine_days(id) ON DELETE CASCADE
+);
+
+-- 6. Routine Exercises (Soporta peso objetivo, subgrupo A1/B1/C1 y tiempo por ejercicio)
+CREATE TABLE routine_exercises (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    routine_block_id INT NOT NULL,
     exercise_id INT NOT NULL,
     sets INT DEFAULT 3,
-    target_reps_min INT,
-    target_reps_max INT,
-    target_rpe DECIMAL(3,1),
-    rest_seconds INT,
+    target_reps_min INT NULL,
+    target_reps_max INT NULL,
+    work_seconds INT NULL,              -- Para ejercicios por tiempo (Ej: 20s)
+    target_weight DECIMAL(6,2) NULL,    -- Peso prescrito
+    target_rpe DECIMAL(3,1) NULL,
+    rest_seconds INT NULL,              -- Descanso
+    subgroup_label VARCHAR(10) NULL,    -- Identificador como 'A1', 'B1', 'C1', 'C2'
     order_index INT DEFAULT 0,
-    FOREIGN KEY (routine_day_id) REFERENCES routine_days(id) ON DELETE CASCADE,
+    notes TEXT NULL,
+    FOREIGN KEY (routine_block_id) REFERENCES routine_blocks(id) ON DELETE CASCADE,
     FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
 );
 
--- Workout sessions (history)
+-- 7. Workout sessions
 CREATE TABLE workout_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -65,8 +103,8 @@ CREATE TABLE workout_sessions (
     FOREIGN KEY (routine_day_id) REFERENCES routine_days(id) ON DELETE SET NULL
 );
 
--- Logged sets within a session
-CREATE TABLE IF NOT EXISTS session_sets (
+-- 8. Session sets
+CREATE TABLE session_sets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id INT NOT NULL,
     exercise_id INT NOT NULL,
@@ -80,15 +118,6 @@ CREATE TABLE IF NOT EXISTS session_sets (
     FOREIGN KEY (session_id) REFERENCES workout_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE,
     FOREIGN KEY (routine_exercise_id) REFERENCES routine_exercises(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS routine_days (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    routine_id INT NOT NULL,
-    name VARCHAR(100) NOT NULL, -- Push, Pull, Piernas
-    order_index INT DEFAULT 0,
-	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_sessions_user ON workout_sessions(user_id);
