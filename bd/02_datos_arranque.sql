@@ -2,7 +2,7 @@ USE app_gym;
 
 -- 1. Crear Usuario Administrador
 INSERT INTO users (username, email, password_hash)
-VALUES ('admin', 'admin@tu-dominio.com', SHA2('Admin123', 256));
+VALUES ('admin', 'admin@tu-dominio.com', '$2y$10$jWoqzSUbjm6wxiJRm/i4cuOROX1qt2lLnn3PhxveSs/33XFK39yyy');
 
 SET @USER_ID = 1;
 

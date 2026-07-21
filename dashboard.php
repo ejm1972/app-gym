@@ -35,8 +35,18 @@ $recentSessions = $db->prepare("
 $recentSessions->execute([$uid]);
 $sessions = $recentSessions->fetchAll();
 
-// Routines preview
-$routines = $db->prepare("SELECT r.*, COUNT(re.id) AS exercise_count FROM routines r LEFT JOIN routine_exercises re ON re.routine_id = r.id WHERE r.user_id = ? GROUP BY r.id ORDER BY r.updated_at DESC LIMIT 4");
+// Routines preview (Consulta actualizada con JOIN a Días y Bloques)
+$routines = $db->prepare("
+    SELECT r.*, COUNT(re.id) AS exercise_count 
+    FROM routines r 
+    LEFT JOIN routine_days rd ON rd.routine_id = r.id 
+    LEFT JOIN routine_blocks rb ON rb.routine_day_id = rd.id 
+    LEFT JOIN routine_exercises re ON re.routine_block_id = rb.id 
+    WHERE r.user_id = ? 
+    GROUP BY r.id 
+    ORDER BY r.updated_at DESC 
+    LIMIT 4
+");
 $routines->execute([$uid]);
 $myRoutines = $routines->fetchAll();
 ?>
